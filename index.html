@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Push Notification</title>
+</head>
+<body>
+    <h1>Web Push Notification with Firebase</h1>
+    <button id="subscribe">Subscribe for Notifications</button>
+
+    <!-- เปลี่ยนมาใช้ Firebase SDK แบบ modular -->
+    <script type="module">
+        // Import the functions you need from the SDKs
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.2/firebase-app.js";
+        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/9.0.2/firebase-messaging.js";
+
+        // Firebase Configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyAXqgO7tadgM6q6vD7ajdToC-aP6FticWs",
+          authDomain: "ku-report.firebaseapp.com",
+          projectId: "ku-report",
+          storageBucket: "ku-report.firebasestorage.app",
+          messagingSenderId: "1029958664659",
+          appId: "1:1029958664659:web:e336f2312dd8e5574e2f26",
+          measurementId: "G-BMG4SEVX62"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const messaging = getMessaging(app);
+
+        // Listen for foreground messages
+        onMessage(messaging, (payload) => {
+          console.log('Message received in foreground: ', payload);
+          const title = payload.notification.title;
+          const options = {
+            body: payload.notification.body,
+            icon: payload.notification.icon
+          };
+          new Notification(title, options);
+        });
+
+        // Request permission and get token
+        document.getElementById("subscribe").addEventListener("click", async () => {
+          try {
+            const permission = await Notification.requestPermission();
+            if (permission === "granted") {
+              console.log("Notification permission granted.");
+              
+              // Register service worker first
+              if ('serviceWorker' in navigator) {
+                const registration = await navigator.serviceWorker.register('firebase-messaging-sw.js');
+                console.log('Service Worker registered with scope: ', registration.scope);
+              }
+              
+              // Get FCM token with the VAPID key
+              try {
+                const currentToken = await getToken(messaging, { 
+                  vapidKey: 'CdEaCY6BmVy-o1m7Spl4AxefFIhfDc92ee9Rp0qlNB8'
+                });
+                
+                if (currentToken) {
+                  console.log("FCM Token:", currentToken);
+                  alert("ได้รับ Token แล้ว: " + currentToken);
+                  // ส่ง token ไปที่เซิร์ฟเวอร์หรือเก็บไว้ใช้งาน
+                } else {
+                  console.log("ไม่สามารถรับ token ได้");
+                  alert("ไม่สามารถรับ token ได้");
+                }
+              } catch (err) {
+                console.error("เกิดข้อผิดพลาดในการรับ token:", err);
+                alert("เกิดข้อผิดพลาด: " + err.message);
+              }
+            } else {
+              console.log("การขออนุญาตแจ้งเตือนถูกปฏิเสธ");
+              alert("คุณปฏิเสธการแจ้งเตือน กรุณาอนุญาตการแจ้งเตือนในการตั้งค่าเบราว์เซอร์");
+            }
+          } catch (err) {
+            console.error("เกิดข้อผิดพลาด:", err);
+            alert("เกิดข้อผิดพลาด: " + err.message);
+          }
+        });
+    </script>
+</body>
+</html>
