@@ -2,7 +2,7 @@
     "name": "KU Report",
     "short_name": "KU Report",
     "description": "ระบบการแจ้งเตือนจาก KU Report",
-    "start_url": "./index.html",
+    "start_url": "index.html",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#006664",
