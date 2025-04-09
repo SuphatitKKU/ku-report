@@ -3,9 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link href="manifest.json" />
+    <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#006664" />
     <title>KU Report - ระบบการแจ้งเตือน</title>
+    
+    <!-- เพิ่ม meta tags สำหรับ PWA -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="KU Report">
+    
     <style>
         body {
             font-family: 'Prompt', 'Sarabun', sans-serif;
@@ -112,11 +119,18 @@
             color: #6c757d;
             margin-top: 5px;
         }
+        #installButton {
+            background-color: #28a745;
+            margin-left: 10px;
+        }
+        #installButton:hover {
+            background-color: #218838;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>KU Report - ระบบการแจ้งเตือน</h1>
+        <h1>KU Report - ระบบการแจ้งเตือน <button id="installButton" style="display: none;">ติดตั้งแอป</button></h1>
         
         <div id="statusContainer">
             <div class="status info" id="fcmStatus">สถานะ FCM: กำลังตรวจสอบ...</div>
@@ -175,6 +189,7 @@
         let messaging;
         let serviceWorkerRegistration;
         let currentPath = '';
+        let deferredPrompt; // สำหรับเก็บเหตุการณ์ beforeinstallprompt
 
         // ฟังก์ชันสำหรับเพิ่มข้อความลงใน log
         function addToLog(message, type = 'info') {
@@ -454,6 +469,34 @@
             document.getElementById('requestPermission').addEventListener('click', requestNotificationPermission);
             document.getElementById('sendTestNotification').addEventListener('click', sendTestNotification);
             document.getElementById('copyToken').addEventListener('click', copyTokenToClipboard);
+        });
+
+        // ตรวจสอบการติดตั้ง PWA
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installButton = document.getElementById('installButton');
+            installButton.style.display = 'inline-block';
+            addToLog('แอปนี้สามารถติดตั้งเป็น PWA ได้', 'info');
+            
+            installButton.addEventListener('click', () => {
+                installButton.style.display = 'none';
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        addToLog('ผู้ใช้ยอมรับการติดตั้งแอป', 'success');
+                    } else {
+                        addToLog('ผู้ใช้ปฏิเสธการติดตั้งแอป', 'warning');
+                    }
+                    deferredPrompt = null;
+                });
+            });
+        });
+
+        // ตรวจสอบว่าแอปถูกเปิดจาก PWA หรือไม่
+        window.addEventListener('appinstalled', () => {
+            addToLog('แอปถูกติดตั้งเรียบร้อยแล้ว', 'success');
+            document.getElementById('installButton').style.display = 'none';
         });
     </script>
 </body>
