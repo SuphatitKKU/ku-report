@@ -3,5 +3,9 @@
     "short_name": "KU Report",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff"
-  }
+    "background_color": "#ffffff",
+    "theme_color": "#006664",
+    "description": "ระบบการแจ้งเตือน KU Report",
+    "orientation": "portrait",
+    "icons": []
+}
