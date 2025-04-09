@@ -270,21 +270,23 @@
                     data: {
                         url: window.location.href,
                         dateOfArrival: Date.now()
-                    },
-                    actions: [
-                        {
-                            action: 'explore',
-                            title: 'ดูรายละเอียด'
-                        },
-                        {
-                            action: 'close',
-                            title: 'ปิด'
-                        }
-                    ]
+                    }
                 };
                 
-                new Notification(notificationTitle, notificationOptions);
-                addToLog('ทดสอบส่งการแจ้งเตือนสำเร็จ', 'success');
+                // ใช้ Service Worker แสดงการแจ้งเตือนแทนการใช้ Notification โดยตรง
+                if (serviceWorkerRegistration) {
+                    serviceWorkerRegistration.showNotification(notificationTitle, notificationOptions)
+                        .then(() => {
+                            addToLog('ทดสอบส่งการแจ้งเตือนสำเร็จ', 'success');
+                        })
+                        .catch((error) => {
+                            addToLog(`เกิดข้อผิดพลาดในการส่งการแจ้งเตือน: ${error.message}`, 'error');
+                        });
+                } else {
+                    // ถ้าไม่มี Service Worker ให้ใช้ Notification API แทน
+                    new Notification(notificationTitle, notificationOptions);
+                    addToLog('ทดสอบส่งการแจ้งเตือนสำเร็จ (โดยไม่ผ่าน Service Worker)', 'warning');
+                }
             } else {
                 addToLog('ไม่สามารถส่งการแจ้งเตือนได้ เนื่องจากยังไม่ได้รับอนุญาต', 'error');
                 alert('คุณยังไม่ได้อนุญาตให้รับการแจ้งเตือน กรุณากดปุ่ม "ขออนุญาตรับการแจ้งเตือน" ก่อน');
@@ -377,15 +379,30 @@
                     console.log('Message received in foreground:', payload);
                     addToLog(`ได้รับข้อความในขณะที่เปิดแอป: ${payload.notification?.title || 'ไม่มีชื่อ'}`, 'success');
                     
-                    // สร้างการแจ้งเตือนเอง
-                    const title = payload.notification?.title || 'การแจ้งเตือนใหม่';
-                    const options = {
-                        body: payload.notification?.body || 'คุณมีข้อความใหม่',
-                        icon: payload.notification?.icon || 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
-                    };
-                    
-                    // แสดงการแจ้งเตือนแบบ local
-                    new Notification(title, options);
+                    // สร้างการแจ้งเตือนผ่าน Service Worker แทน
+                    if (serviceWorkerRegistration) {
+                        const title = payload.notification?.title || 'การแจ้งเตือนใหม่';
+                        const options = {
+                            body: payload.notification?.body || 'คุณมีข้อความใหม่',
+                            icon: payload.notification?.icon || 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
+                            data: payload.data || {}
+                        };
+                        
+                        serviceWorkerRegistration.showNotification(title, options)
+                            .catch(error => {
+                                console.error('Error showing notification:', error);
+                                // Fallback to native Notification
+                                new Notification(title, options);
+                            });
+                    } else {
+                        // Fallback to native Notification
+                        const title = payload.notification?.title || 'การแจ้งเตือนใหม่';
+                        const options = {
+                            body: payload.notification?.body || 'คุณมีข้อความใหม่',
+                            icon: payload.notification?.icon || 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
+                        };
+                        new Notification(title, options);
+                    }
                 });
                 
                 // ตรวจสอบสถานะการอนุญาตปัจจุบัน
