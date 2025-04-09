@@ -1,85 +1,440 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Push Notification</title>
+    <title>KU Report - ระบบการแจ้งเตือน</title>
+    <style>
+        body {
+            font-family: 'Prompt', 'Sarabun', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #006664;
+        }
+        button {
+            background-color: #006664;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 12px 8px 12px 0;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #004c4a;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .notification {
+            background-color: #f8f9fa;
+            border-left: 4px solid #28a745;
+            padding: 12px;
+            margin: 12px 0;
+            border-radius: 4px;
+        }
+        .notification.error {
+            border-left-color: #dc3545;
+        }
+        .notification.warning {
+            border-left-color: #ffc107;
+        }
+        #notificationLog {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 8px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 6px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        #tokenContainer {
+            margin-top: 20px;
+            word-break: break-all;
+        }
+        #fcmToken {
+            font-size: 12px;
+            background: #eee;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+        .copy-btn {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 5px;
+        }
+        .copy-btn:hover {
+            background-color: #5a6268;
+        }
+        .debug-info {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
 </head>
 <body>
-    <h1>Web Push Notification with Firebase</h1>
-    <button id="subscribe">Subscribe for Notifications</button>
+    <div class="container">
+        <h1>KU Report - ระบบการแจ้งเตือน</h1>
+        
+        <div id="statusContainer">
+            <div class="status info" id="fcmStatus">สถานะ FCM: กำลังตรวจสอบ...</div>
+            <div class="status info" id="permissionStatus">สถานะการอนุญาต: กำลังตรวจสอบ...</div>
+            <div class="status info" id="swStatus">สถานะ Service Worker: กำลังตรวจสอบ...</div>
+        </div>
+        
+        <div>
+            <button id="requestPermission">ขออนุญาตรับการแจ้งเตือน</button>
+            <button id="sendTestNotification" disabled>ทดสอบส่งการแจ้งเตือน</button>
+        </div>
+        
+        <div id="tokenContainer">
+            <div style="display: flex; align-items: center;">
+                <strong>FCM Token:</strong>
+                <button id="copyToken" class="copy-btn" title="คัดลอก Token" disabled>คัดลอก</button>
+            </div>
+            <div id="fcmToken">ยังไม่ได้รับ token</div>
+        </div>
 
-    <!-- เปลี่ยนมาใช้ Firebase SDK แบบ modular -->
-    <script type="module">
-        // Import the functions you need from the SDKs
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.0.2/firebase-app.js";
-        import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/9.0.2/firebase-messaging.js";
+        <div style="margin-top: 20px;">
+            <details>
+                <summary>ข้อมูลเพิ่มเติม</summary>
+                <div class="debug-info">
+                    <div id="browserInfo">เบราว์เซอร์: กำลังตรวจสอบ...</div>
+                    <div id="locationInfo">ตำแหน่งไฟล์: กำลังตรวจสอบ...</div>
+                    <div id="swScope">Service Worker Scope: กำลังตรวจสอบ...</div>
+                </div>
+            </details>
+        </div>
+        
+        <h2>บันทึกการแจ้งเตือน</h2>
+        <div id="notificationLog"></div>
+    </div>
 
-        // Firebase Configuration
+    <!-- เพิ่ม Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js"></script>
+
+    <script>
+        // ตั้งค่า Firebase
         const firebaseConfig = {
-          apiKey: "AIzaSyAXqgO7tadgM6q6vD7ajdToC-aP6FticWs",
-          authDomain: "ku-report.firebaseapp.com",
-          projectId: "ku-report",
-          storageBucket: "ku-report.firebasestorage.app",
-          messagingSenderId: "1029958664659",
-          appId: "1:1029958664659:web:e336f2312dd8e5574e2f26",
-          measurementId: "G-BMG4SEVX62"
+            apiKey: "AIzaSyAXqgO7tadgM6q6vD7ajdToC-aP6FticWs",
+            authDomain: "ku-report.firebaseapp.com",
+            projectId: "ku-report",
+            storageBucket: "ku-report.firebasestorage.app",
+            messagingSenderId: "1029958664659",
+            appId: "1:1029958664659:web:e336f2312dd8e5574e2f26",
+            measurementId: "G-BMG4SEVX62"
         };
 
-        // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
-        const messaging = getMessaging(app);
+        // Web Push Certificate (VAPID Key)
+        const vapidKey = "BLBtTvZAAkr6iDqeJW-mFVtOiNRmEbzPRksQD8nLXGH4zp2gJp50jXFzPsKScy76N_pe0vQM-w1gDSKCdrS85NY";
 
-        // Listen for foreground messages
-        onMessage(messaging, (payload) => {
-          console.log('Message received in foreground: ', payload);
-          const title = payload.notification.title;
-          const options = {
-            body: payload.notification.body,
-            icon: payload.notification.icon
-          };
-          new Notification(title, options);
-        });
+        // ตัวแปรร่วม
+        let messaging;
+        let serviceWorkerRegistration;
+        let currentPath = '';
 
-        // Request permission and get token
-        document.getElementById("subscribe").addEventListener("click", async () => {
-          try {
-            const permission = await Notification.requestPermission();
-            if (permission === "granted") {
-              console.log("Notification permission granted.");
-              
-              // Register service worker first
-              if ('serviceWorker' in navigator) {
-                const registration = await navigator.serviceWorker.register('firebase-messaging-sw.js');
-                console.log('Service Worker registered with scope: ', registration.scope);
-              }
-              
-              // Get FCM token with the VAPID key
-              try {
-                const currentToken = await getToken(messaging, { 
-                  vapidKey: 'CdEaCY6BmVy-o1m7Spl4AxefFIhfDc92ee9Rp0qlNB8'
-                });
+        // ฟังก์ชันสำหรับเพิ่มข้อความลงใน log
+        function addToLog(message, type = 'info') {
+            const logElement = document.getElementById('notificationLog');
+            const entryElement = document.createElement('div');
+            entryElement.className = `notification ${type}`;
+            entryElement.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            logElement.prepend(entryElement);
+            console.log(`[${type}] ${message}`);
+        }
+
+        // ฟังก์ชันสำหรับอัปเดตสถานะ
+        function updateStatus(elementId, message, type = 'info') {
+            const statusElement = document.getElementById(elementId);
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+
+        // ฟังก์ชันสำหรับได้รับ Current Path
+        function getCurrentPath() {
+            // ตัดส่วนของชื่อไฟล์ออกจาก path
+            let path = window.location.pathname;
+            const lastSlash = path.lastIndexOf('/');
+            if (lastSlash !== -1 && lastSlash !== path.length - 1) {
+                path = path.substring(0, lastSlash + 1);
+            }
+            if (!path.endsWith('/')) {
+                path += '/';
+            }
+            return path;
+        }
+
+        // ฟังก์ชันสำหรับการรับ Service Worker Path
+        function getServiceWorkerPath() {
+            currentPath = getCurrentPath();
+            const swPath = `${currentPath}firebase-messaging-sw.js`;
+            return swPath;
+        }
+
+        // ฟังก์ชันขออนุญาตรับการแจ้งเตือน
+        async function requestNotificationPermission() {
+            try {
+                updateStatus('permissionStatus', 'สถานะการอนุญาต: กำลังขออนุญาต...', 'info');
+                const permission = await Notification.requestPermission();
+                
+                if (permission === 'granted') {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: อนุญาตแล้ว', 'success');
+                    document.getElementById('sendTestNotification').disabled = false;
+                    addToLog('ได้รับอนุญาตให้ส่งการแจ้งเตือนแล้ว', 'success');
+                    await getTokenAndSetup();
+                } else if (permission === 'denied') {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: ถูกปฏิเสธ', 'error');
+                    addToLog('การขออนุญาตการแจ้งเตือนถูกปฏิเสธ', 'error');
+                } else {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: ยังไม่ได้ตัดสินใจ', 'warning');
+                    addToLog('การขออนุญาตการแจ้งเตือนถูกเลื่อนออกไป', 'warning');
+                }
+            } catch (error) {
+                console.error('Error requesting permission:', error);
+                updateStatus('permissionStatus', 'สถานะการอนุญาต: เกิดข้อผิดพลาด', 'error');
+                addToLog(`เกิดข้อผิดพลาดในการขออนุญาต: ${error.message}`, 'error');
+            }
+        }
+
+        // ฟังก์ชันรับ token และตั้งค่าการรับข้อความ
+        async function getTokenAndSetup() {
+            try {
+                const currentToken = await messaging.getToken({ vapidKey });
                 
                 if (currentToken) {
-                  console.log("FCM Token:", currentToken);
-                  alert("ได้รับ Token แล้ว: " + currentToken);
-                  // ส่ง token ไปที่เซิร์ฟเวอร์หรือเก็บไว้ใช้งาน
+                    document.getElementById('fcmToken').textContent = currentToken;
+                    document.getElementById('copyToken').disabled = false;
+                    addToLog('ได้รับ FCM token แล้ว', 'success');
+                    console.log('FCM Token:', currentToken);
                 } else {
-                  console.log("ไม่สามารถรับ token ได้");
-                  alert("ไม่สามารถรับ token ได้");
+                    document.getElementById('fcmToken').textContent = 'ไม่สามารถรับ token ได้';
+                    addToLog('ไม่สามารถรับ FCM token ได้', 'error');
+                    console.log('No registration token available.');
                 }
-              } catch (err) {
-                console.error("เกิดข้อผิดพลาดในการรับ token:", err);
-                alert("เกิดข้อผิดพลาด: " + err.message);
-              }
-            } else {
-              console.log("การขออนุญาตแจ้งเตือนถูกปฏิเสธ");
-              alert("คุณปฏิเสธการแจ้งเตือน กรุณาอนุญาตการแจ้งเตือนในการตั้งค่าเบราว์เซอร์");
+            } catch (error) {
+                console.error('Error getting token:', error);
+                document.getElementById('fcmToken').textContent = `เกิดข้อผิดพลาด: ${error.message}`;
+                addToLog(`เกิดข้อผิดพลาดในการรับ token: ${error.message}`, 'error');
             }
-          } catch (err) {
-            console.error("เกิดข้อผิดพลาด:", err);
-            alert("เกิดข้อผิดพลาด: " + err.message);
-          }
+        }
+
+        // ฟังก์ชันส่งการแจ้งเตือนทดสอบ (แบบ local)
+        function sendTestNotification() {
+            if (Notification.permission === "granted") {
+                const notificationTitle = 'ทดสอบการแจ้งเตือน KU Report';
+                const notificationOptions = {
+                    body: 'นี่คือการทดสอบการแจ้งเตือนจากแอป KU Report ที่ส่งเวลา ' + new Date().toLocaleTimeString(),
+                    icon: 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
+                    badge: 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
+                    data: {
+                        url: window.location.href,
+                        dateOfArrival: Date.now()
+                    },
+                    actions: [
+                        {
+                            action: 'explore',
+                            title: 'ดูรายละเอียด'
+                        },
+                        {
+                            action: 'close',
+                            title: 'ปิด'
+                        }
+                    ]
+                };
+                
+                new Notification(notificationTitle, notificationOptions);
+                addToLog('ทดสอบส่งการแจ้งเตือนสำเร็จ', 'success');
+            } else {
+                addToLog('ไม่สามารถส่งการแจ้งเตือนได้ เนื่องจากยังไม่ได้รับอนุญาต', 'error');
+                alert('คุณยังไม่ได้อนุญาตให้รับการแจ้งเตือน กรุณากดปุ่ม "ขออนุญาตรับการแจ้งเตือน" ก่อน');
+            }
+        }
+
+        // ฟังก์ชันคัดลอก Token
+        function copyTokenToClipboard() {
+            const tokenText = document.getElementById('fcmToken').textContent;
+            if (tokenText && tokenText !== 'ยังไม่ได้รับ token' && !tokenText.startsWith('เกิดข้อผิดพลาด')) {
+                navigator.clipboard.writeText(tokenText)
+                    .then(() => {
+                        addToLog('คัดลอก FCM Token แล้ว', 'success');
+                        const copyBtn = document.getElementById('copyToken');
+                        copyBtn.textContent = 'คัดลอกแล้ว!';
+                        setTimeout(() => {
+                            copyBtn.textContent = 'คัดลอก';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        addToLog(`เกิดข้อผิดพลาดในการคัดลอก: ${err.message}`, 'error');
+                    });
+            }
+        }
+
+        // ตรวจสอบว่าเบราว์เซอร์รองรับการแจ้งเตือนหรือไม่
+        function checkNotificationSupport() {
+            if (!('Notification' in window)) {
+                updateStatus('permissionStatus', 'สถานะการอนุญาต: เบราว์เซอร์ไม่รองรับการแจ้งเตือน', 'error');
+                addToLog('เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน', 'error');
+                return false;
+            }
+            
+            // ตรวจสอบข้อมูลเบราว์เซอร์
+            const userAgent = navigator.userAgent;
+            document.getElementById('browserInfo').textContent = `เบราว์เซอร์: ${userAgent}`;
+            
+            // ตรวจสอบตำแหน่งไฟล์
+            document.getElementById('locationInfo').textContent = `ตำแหน่งไฟล์: ${window.location.href}`;
+            
+            return true;
+        }
+
+        // ลงทะเบียน Service Worker
+        async function registerServiceWorker() {
+            try {
+                const swPath = getServiceWorkerPath();
+                updateStatus('swStatus', `กำลังลงทะเบียน Service Worker ที่ ${swPath}...`, 'info');
+                addToLog(`กำลังลงทะเบียน Service Worker ที่ ${swPath}`, 'info');
+                
+                // ตรวจสอบว่ามี Service Worker อยู่แล้วหรือไม่
+                const swRegistrations = await navigator.serviceWorker.getRegistrations();
+                for (const reg of swRegistrations) {
+                    // ลบ Service Worker เก่าออกก่อน (เพื่อแก้ปัญหากรณีมีการอัปเดต)
+                    await reg.unregister();
+                    addToLog(`ลบ Service Worker ที่ ${reg.scope} แล้ว`, 'info');
+                }
+                
+                // ลงทะเบียน Service Worker ใหม่
+                serviceWorkerRegistration = await navigator.serviceWorker.register(swPath);
+                
+                document.getElementById('swScope').textContent = `Service Worker Scope: ${serviceWorkerRegistration.scope}`;
+                updateStatus('swStatus', `ลงทะเบียน Service Worker สำเร็จ (${serviceWorkerRegistration.scope})`, 'success');
+                addToLog(`ลงทะเบียน Service Worker สำเร็จ: ${serviceWorkerRegistration.scope}`, 'success');
+                
+                return serviceWorkerRegistration;
+            } catch (error) {
+                console.error('Service Worker registration failed:', error);
+                updateStatus('swStatus', `การลงทะเบียน Service Worker ล้มเหลว: ${error.message}`, 'error');
+                addToLog(`การลงทะเบียน Service Worker ล้มเหลว: ${error.message}`, 'error');
+                
+                // แสดงข้อมูลเพิ่มเติมเกี่ยวกับข้อผิดพลาด
+                if (error.message.includes('404')) {
+                    addToLog(`ไม่พบไฟล์ Service Worker - โปรดตรวจสอบว่าไฟล์ 'firebase-messaging-sw.js' อยู่ที่ '${currentPath}'`, 'error');
+                }
+                
+                throw error;
+            }
+        }
+
+        // ฟังก์ชันกำหนดค่าการรับข้อความ
+        async function setupMessaging(serviceWorkerReg) {
+            try {
+                // ใน Firebase SDK v8 เราสามารถใช้ useServiceWorker() ได้
+                // หมายเหตุ: ฟังก์ชันนี้ต้องเรียกก่อน getToken()
+                messaging.useServiceWorker(serviceWorkerReg);
+                
+                // ตั้งค่าการรับข้อความเมื่อแอปอยู่เบื้องหน้า
+                messaging.onMessage((payload) => {
+                    console.log('Message received in foreground:', payload);
+                    addToLog(`ได้รับข้อความในขณะที่เปิดแอป: ${payload.notification?.title || 'ไม่มีชื่อ'}`, 'success');
+                    
+                    // สร้างการแจ้งเตือนเอง
+                    const title = payload.notification?.title || 'การแจ้งเตือนใหม่';
+                    const options = {
+                        body: payload.notification?.body || 'คุณมีข้อความใหม่',
+                        icon: payload.notification?.icon || 'https://upload.wikimedia.org/wikipedia/commons/e/e3/Emblem_of_Kasetsart_University.svg',
+                    };
+                    
+                    // แสดงการแจ้งเตือนแบบ local
+                    new Notification(title, options);
+                });
+                
+                // ตรวจสอบสถานะการอนุญาตปัจจุบัน
+                if (Notification.permission === 'granted') {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: อนุญาตแล้ว', 'success');
+                    document.getElementById('sendTestNotification').disabled = false;
+                    await getTokenAndSetup();
+                } else if (Notification.permission === 'denied') {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: ถูกปฏิเสธ', 'error');
+                    document.getElementById('sendTestNotification').disabled = true;
+                } else {
+                    updateStatus('permissionStatus', 'สถานะการอนุญาต: ยังไม่ได้ตัดสินใจ', 'warning');
+                    document.getElementById('sendTestNotification').disabled = true;
+                }
+            } catch (error) {
+                console.error('Error setting up messaging:', error);
+                addToLog(`เกิดข้อผิดพลาดในการตั้งค่าการรับข้อความ: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // เมื่อ DOM โหลดเสร็จ
+        document.addEventListener('DOMContentLoaded', async () => {
+            // ตรวจสอบการรองรับ
+            if (!checkNotificationSupport()) return;
+
+            try {
+                // เริ่มต้น Firebase
+                firebase.initializeApp(firebaseConfig);
+                
+                // สร้าง messaging instance
+                messaging = firebase.messaging();
+                updateStatus('fcmStatus', 'สถานะ FCM: เชื่อมต่อสำเร็จ', 'success');
+                addToLog('เชื่อมต่อ Firebase Cloud Messaging สำเร็จ', 'success');
+                
+                // ลงทะเบียน Service Worker และตั้งค่าการรับข้อความ
+                const swRegistration = await registerServiceWorker();
+                await setupMessaging(swRegistration);
+                
+            } catch (error) {
+                console.error('Error initializing Firebase:', error);
+                updateStatus('fcmStatus', `สถานะ FCM: เกิดข้อผิดพลาด - ${error.message}`, 'error');
+                addToLog(`เกิดข้อผิดพลาดในการเริ่มต้น Firebase: ${error.message}`, 'error');
+            }
+            
+            // เพิ่ม event listener สำหรับปุ่ม
+            document.getElementById('requestPermission').addEventListener('click', requestNotificationPermission);
+            document.getElementById('sendTestNotification').addEventListener('click', sendTestNotification);
+            document.getElementById('copyToken').addEventListener('click', copyTokenToClipboard);
         });
     </script>
 </body>
