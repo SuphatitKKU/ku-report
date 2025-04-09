@@ -6,6 +6,14 @@ importScripts('https://www.gstatic.com/firebasejs/8.10.0/firebase-messaging.js')
 // บันทึกว่า SW ทำงาน
 console.log("Firebase Service Worker ทำงานแล้ว!");
 
+// Cache สำหรับ offline support
+const CACHE_NAME = 'ku-report-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
+
 // Firebase Configuration
 const firebaseConfig = {
   apiKey: "AIzaSyAXqgO7tadgM6q6vD7ajdToC-aP6FticWs",
@@ -77,4 +85,30 @@ self.addEventListener('notificationclick', function(event) {
     // ถ้าไม่มี URL ระบุให้เปิดหน้าเว็บหลัก
     event.waitUntil(clients.openWindow('/'));
   }
+});
+
+// Install Service Worker และ cache ไฟล์ที่จำเป็น
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('Opened cache');
+        return cache.addAll(urlsToCache);
+      })
+  );
+});
+
+// Fetch event สำหรับ offline support
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => {
+        // Cache hit - return response
+        if (response) {
+          return response;
+        }
+        return fetch(event.request);
+      }
+    )
+  );
 });
